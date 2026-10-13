@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -227,11 +226,23 @@ func kokoroReleasesAPIURL() string {
 	return "https://api.github.com/repos/thewh1teagle/kokoro-onnx/releases?per_page=30"
 }
 
+// kokoroAsset keeps the validated local filename separate from the download URL.
+type kokoroAsset struct {
+	Name string
+	URL  string
+}
+
 // kokoroFallbackAssets pins a known-good release for when the releases API
 // is unreachable (rate limit, air gap without an API mirror).
-var kokoroFallbackAssets = map[string]string{
-	"kokoro-v*.onnx": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
-	"voices-v*.bin":  "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
+var kokoroFallbackAssets = map[string]kokoroAsset{
+	"kokoro-v*.onnx": {
+		Name: "kokoro-v1.0.onnx",
+		URL:  "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
+	},
+	"voices-v*.bin": {
+		Name: "voices-v1.0.bin",
+		URL:  "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
+	},
 }
 
 // kokoroAssetNames matches the canonical full-precision asset per model
@@ -243,11 +254,11 @@ var kokoroAssetNames = map[string]*regexp.Regexp{
 	"voices-v*.bin":  regexp.MustCompile(`^voices-v\d+(\.\d+)*\.bin$`),
 }
 
-// resolveKokoroModelAssets maps each model pattern to the download URL of
+// resolveKokoroModelAssets maps each model pattern to the name and URL of
 // the matching asset in the newest upstream "model-files-*" release that
 // carries all required files, so new model versions are picked up without a
 // CLI change.
-func resolveKokoroModelAssets() (map[string]string, error) {
+func resolveKokoroModelAssets() (map[string]kokoroAsset, error) {
 	client := &http.Client{Timeout: 30 * time.Second, Transport: httpx.UserAgentTransport{UserAgent: cliUserAgent()}}
 	resp, err := client.Get(kokoroReleasesAPIURL())
 	if err != nil {
@@ -275,11 +286,11 @@ func resolveKokoroModelAssets() (map[string]string, error) {
 		if !strings.HasPrefix(rel.TagName, "model-files-") {
 			continue
 		}
-		assets := make(map[string]string, len(kokoroModelPatterns))
+		assets := make(map[string]kokoroAsset, len(kokoroModelPatterns))
 		for _, pattern := range kokoroModelPatterns {
 			for _, a := range rel.Assets {
 				if kokoroAssetNames[pattern].MatchString(a.Name) {
-					assets[pattern] = a.BrowserDownloadURL
+					assets[pattern] = kokoroAsset{Name: a.Name, URL: a.BrowserDownloadURL}
 					break
 				}
 			}
@@ -308,13 +319,17 @@ func downloadKokoroModels(configDir string) error {
 		if kokoroModelPath(pattern) != "" {
 			continue
 		}
-		url, ok := assets[pattern]
+		asset, ok := assets[pattern]
 		if !ok {
 			return fmt.Errorf("no download source for %s", pattern)
 		}
-		dest := filepath.Join(configDir, path.Base(url))
-		if err := downloadFile(dest, url); err != nil {
-			return fmt.Errorf("failed to download %s: %w", path.Base(url), err)
+		// Apply the same filename constraint to resolved and fallback assets.
+		if !kokoroAssetNames[pattern].MatchString(asset.Name) {
+			return fmt.Errorf("invalid asset name %q for %s", asset.Name, pattern)
+		}
+		dest := filepath.Join(configDir, asset.Name)
+		if err := downloadFile(dest, asset.URL); err != nil {
+			return fmt.Errorf("failed to download %s: %w", asset.Name, err)
 		}
 	}
 	return nil
