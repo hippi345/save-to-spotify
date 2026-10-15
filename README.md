@@ -107,7 +107,7 @@ If you can't run the install script:
 
 ### Build from source
 
-Requires [Go](https://go.dev/dl/) 1.21+.
+Requires [Go](https://go.dev/dl/) 1.26+.
 
 ```bash
 go build -ldflags "-X github.com/spotify/save-to-spotify/cmd.commit=$(git rev-parse --short HEAD)" \
@@ -263,9 +263,10 @@ Example `timeline.json`:
   "items": [
     { "chapter": { "title": "Introduction", "start_time_ms": 0 } },
     { "chapter": { "title": "Key Concepts", "start_time_ms": 45000 } },
-    { "spotify_entity": { "start_time_ms": 60000, "duration_ms": 30000, "uri": "spotify:track:abc123" } },
-    { "link": { "start_time_ms": 95000, "duration_ms": 20000, "url": "https://example.com/slides" } },
-    { "chapter": { "title": "Summary", "start_time_ms": 120000 } }
+    { "image": { "start_time_ms": 50000, "duration_ms": 25000, "image": "diagram.jpg", "title": "Process Flow" } },
+    { "spotify_entity": { "start_time_ms": 80000, "duration_ms": 30000, "uri": "spotify:track:abc123" } },
+    { "link": { "start_time_ms": 115000, "duration_ms": 20000, "url": "https://example.com/slides" } },
+    { "chapter": { "title": "Summary", "start_time_ms": 140000 } }
   ]
 }
 ```
